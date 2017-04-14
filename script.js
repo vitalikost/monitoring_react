@@ -1,6 +1,19 @@
 
 window.ee = new EventEmitter();
 
+function result_monitor(state=[], action) {
+    switch (action.type) {
+        case 'ADD':
+            return  state.concat([{ Date_time: new Date, completed: action.result }]);
+        case 'CLEAR':
+            return  [];
+        default:
+            return state
+    }
+}
+window.store = Redux.createStore(result_monitor);
+
+
 function get(url) {
     // Return a new promise.
     return new Promise(function(resolve, reject) {
@@ -37,6 +50,9 @@ class Connect extends React.Component {
 
     constructor(props) {
         super(props);
+
+
+
         this.state = {
             ip_client: "http://127.0.0.1:3000/",
             result_connect:["Одыжаем результат"],
@@ -48,12 +64,21 @@ class Connect extends React.Component {
         this.on_Change_ip = this.on_Change_ip.bind(this);
         this.on_click_button = this.on_click_button.bind(this);
 
+
+    }
+
+
+    componentWillMount(){
+        var self = this;
+        if(localStorage.getItem("ip_client")!=undefined)
+        self.setState({ip_client:localStorage.getItem("ip_client")});
     }
 
     on_Change_ip(e) {
         var obj={};
         obj.ip_client= e.target.value;
         this.setState(obj);
+        localStorage.setItem("ip_client",e.target.value);
     }
 
     on_click_button() {
@@ -73,6 +98,7 @@ class Connect extends React.Component {
             obj.color= "red";
             self.setState(obj);
             window.ee.emit('visible.settings', {visible:false,ip_client:""});
+            window.ee.emit('visible.result', {visible:false});
         });
     }
 
@@ -83,7 +109,7 @@ class Connect extends React.Component {
              <div id="connect_options">
                 <h1>{this.props.welcome}</h1>
                 <label>Адрес:</label>
-                <input id="ip_server" defaultValue="http://127.0.0.1:3000/" onChange={this.on_Change_ip}/>
+                <input id="ip_server" defaultValue={this.state.ip_client} onChange={this.on_Change_ip}/>
                 <button onClick={this.on_click_button}>Подключить</button>
                     {
                         this.state.result_connect.map(function(item, index){
@@ -117,6 +143,7 @@ class SettingMonitoring extends React.Component {
         this.on_Change_limit_ticks = this.on_Change_limit_ticks.bind(this);
         this.on_Change_limit_ticks = this.on_Change_limit_ticks.bind(this);
         this.tick = this.tick.bind(this);
+        this.clear_store = this.clear_store.bind(this);
 
     }
 
@@ -165,6 +192,8 @@ class SettingMonitoring extends React.Component {
         var url =this.state.ip_client+"temperature";
         get(url).then(function (result) {
             console.log(result);
+            window.ee.emit('visible.result', {visible:true,result:result});
+            window.store.dispatch({ type: 'ADD',result:result });
         }).catch(function (err) {
             console.log(err);
         });
@@ -182,6 +211,9 @@ class SettingMonitoring extends React.Component {
 
     }
 
+    clear_store(){
+        window.store.dispatch({ type: 'CLEAR'});
+    }
 
 
     componentWillMount(){
@@ -199,15 +231,14 @@ class SettingMonitoring extends React.Component {
                 <div id="setting_monitoring" >
                     <h1>{this.props.welcome}</h1>
                     <label>Запрос данных каждые:</label>
-                    <input type="number" id="timer_interval" defaultValue="1" style={{width:'60px'}} onChange={this.on_Change_timer_interval} />
+                    <input type="number" id="timer_interval" defaultValue={this.state.timer_interval} style={{width:'60px'}} onChange={this.on_Change_timer_interval} />
                     <label> сек.</label><br></br>
                     <button id="start_timer" onClick={this.activate_timer}>Старт</button>
                     <button id="stop_timer" onClick={this.clear_timer}>Стоп</button>
-                    <button id="create_chart" onClick={this.props.clean_result} >Привет от наследника</button>
-                    <input type="checkbox" id="online_chart" defaultChecked="true" />
-                    <label>Онлайн</label><br></br>
+                    <button id="create_chart" onClick={ this.clear_store } >Очистить историю</button>
+                    <br></br>
                     <label>Количество запросов:</label>
-                    <input type="number" id="limit_ticks" defaultValue="0" style={{width:'60px'}} onChange={this.on_Change_limit_ticks} />
+                    <input type="number" id="limit_ticks" defaultValue={this.state.ticks} style={{width:'60px'}} onChange={this.on_Change_limit_ticks} />
                     <p>{this.state.ip_client +' интервал '+this.state.timer_interval+' сек.'+this.show_tiks()}</p>
                     <p>{this.state.timer}</p>
                 </div>
@@ -219,11 +250,60 @@ class SettingMonitoring extends React.Component {
 }
 
 
+//result
+class Result extends React.Component {
+
+    constructor(props) {
+        super(props);
+        this.state = {
+            visible: false,
+            result:"",
+            history_:[]
+
+        };
+    }
+
+
+    componentWillMount(){
+        var self = this;
+        window.ee.addListener('visible.result', function(item) {
+            self.setState({visible: item.visible,result:item.result});
+        });
+
+        window.store.subscribe(function () {
+            self.setState({history_: window.store.getState()});
+        })
+    }
+
+
+    render() {
+
+        if(this.state.visible){
+            return (
+                <div id="result_monitoring">
+                    <h1>{this.props.welcome}</h1>
+                    <p>Последний замер:{this.state.result}</p>
+                    <div>История замеров:</div>
+                    {
+                        this.state.history_.map(function(item, index){
+                            return <div key={index}> {item.Date_time.toDateString()}  {item.completed}</div>
+                        })
+                    }
+                </div>
+            )
+
+        } else {return null;}
+
+    }
+
+}
+
 
 ReactDOM.render(
     <div>
     <Connect welcome ="Система мониторинга:" />
     <SettingMonitoring welcome ="Настройка мониторинга:" />
+    <Result welcome ="Результат мониторинга:" />
     </div>,
     document.getElementById("root")
 );
