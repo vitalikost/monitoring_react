@@ -1,2 +1,2 @@
-Мониториг для датчиков на Ардуино.<br>
-Сделан с помощю React<br>
+Мониторинг для датчиков на Ардуино.<br>
+React, ajax,promise,redux,EventEmiter<br>
